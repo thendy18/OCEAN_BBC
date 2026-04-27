@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bca-blue: #0060af;
+  --color-bca-deep: #005daa;
+  --color-bca-navy: #003b70;
+  --color-bca-orange: #f26522;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
