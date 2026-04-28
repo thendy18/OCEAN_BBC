@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 
 type GeminiRequest = {
-  mode?: 'probing' | 'copilot';
+  mode?: 'probing' | 'copilot' | 'tutor' | 'voice-analysis';
   question?: string;
+  transcript?: string;
+  product?: unknown;
+  tutorHistory?: Array<{ role: string; text: string }>;
   profile?: unknown;
   profileIssues?: unknown[];
   painPoints?: unknown[];
@@ -35,6 +38,27 @@ const fallbackAnswer = (body: GeminiRequest) => {
       'Pertanyaan 3: "Siapa saja yang biasanya ikut approve atau memantau proses tersebut?"',
       'Arahkan ke solusi OCEAN yang muncul di kartu rekomendasi, lalu hindari janji teknis. Untuk pricing, legal, atau integrasi detail, eskalasi ke HO.',
     ].join('\n\n');
+  }
+
+  if (body.mode === 'tutor') {
+    return '[Mode demo] Tanyakan tentang produk ini: cara menjelaskan ke nasabah dengan bahasa awam, siapa target klien yang paling cocok, dan bagaimana membedakannya dari produk lain. Untuk pricing atau limit teknis, cek manual produk resmi BCA.';
+  }
+
+  if (body.mode === 'voice-analysis') {
+    return [
+      '[Mode demo - GEMINI_API_KEY belum terpasang]',
+      'Kebutuhan yang terdeteksi:',
+      '1. Nasabah kemungkinan membutuhkan solusi manajemen kas atau pembayaran',
+      '2. Ada indikasi kebutuhan efisiensi proses keuangan',
+      '',
+      'Produk OCEAN yang cocok:',
+      '• myBCA Bisnis — untuk monitoring transaksi harian',
+      '• Virtual Account — untuk mempermudah penerimaan pembayaran',
+      '',
+      'Pertanyaan lanjutan:',
+      '• "Berapa banyak transaksi pembayaran yang masuk setiap harinya?"',
+      '• "Siapa yang biasanya memantau arus kas perusahaan?"',
+    ].join('\n');
   }
 
   return [
@@ -71,6 +95,35 @@ const buildPrompt = (body: GeminiRequest) => {
     ].join('\n\n');
   }
 
+  if (body.mode === 'tutor') {
+    const historyText = (body.tutorHistory ?? [])
+      .map((m) => `${m.role === 'staff' ? 'Staf' : 'AI'}: ${m.text}`)
+      .join('\n');
+
+    return [
+      'Kamu adalah OCEAN Academy AI Tutor, membantu staf cabang BCA memahami produk secara mendalam.',
+      'Gunakan bahasa Indonesia yang sederhana. JANGAN gunakan markdown seperti ** atau ##. Tulis teks biasa saja.',
+      `Detail produk yang sedang dipelajari:\n${compactJson(body.product ?? {})}`,
+      historyText ? `Riwayat percakapan sebelumnya:\n${historyText}` : '',
+      `Pertanyaan staf: ${body.question ?? ''}`,
+      'Jawab maksimal 120 kata dalam teks biasa tanpa formatting markdown.',
+      'Fokus: cara menjelaskan ke nasabah, kapan menawarkan, keunggulan vs produk lain, cara menghadapi keberatan.',
+      'Jika soal pricing atau limit teknis, arahkan ke manual produk resmi atau eskalasi ke HO.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  if (body.mode === 'voice-analysis') {
+    return [
+      'Kamu adalah OCEAN Co-Pilot yang menganalisis transkrip percakapan antara staf BCA dan nasabah.',
+      'Produk OCEAN BCA yang tersedia: myBCA Bisnis, Virtual Account, EDC, QRIS, API BCA, Stream B2B, CATAPA, OP Business Banking, Pajakku, Giro BCA, Tabungan Bisnis, Kredit Usaha, Deposito, Reksa Dana, Obligasi, Asuransi Usaha, Visa Corporate Card.',
+      `Transkrip percakapan:\n"${body.transcript ?? ''}"`,
+      'Analisis percakapan lalu tulis KETIGA bagian di bawah sampai selesai. JANGAN berhenti di tengah. JANGAN gunakan markdown (**, ##, *). Gunakan teks biasa saja.',
+      'Tulis persis dengan format ini (isi bagian ... dengan konten nyata):\n\nKEBUTUHAN NASABAH:\n1. [kebutuhan pertama]\n2. [kebutuhan kedua]\n3. [kebutuhan ketiga jika ada]\n\nPRODUK OCEAN YANG COCOK:\n- [Nama Produk]: [alasan cocok berdasarkan transkrip]\n- [Nama Produk]: [alasan cocok berdasarkan transkrip]\n- [Nama Produk]: [alasan cocok berdasarkan transkrip]\n\nPERTANYAAN LANJUTAN UNTUK STAF:\n- [pertanyaan 1]\n- [pertanyaan 2]\n- [pertanyaan 3]',
+    ].join('\n\n');
+  }
+
   return [
     sharedContext,
     `Pertanyaan staf atau nasabah: ${body.question ?? ''}`,
@@ -104,7 +157,7 @@ export async function POST(request: Request) {
       ],
       generationConfig: {
         temperature: 0.35,
-        maxOutputTokens: 700,
+        maxOutputTokens: body.mode === 'voice-analysis' ? 1024 : 700,
       },
     }),
   });

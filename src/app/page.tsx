@@ -1,11 +1,29 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { ReactNode } from 'react';
 
+interface SpeechRecognitionEvent extends Event {
+  readonly resultIndex: number;
+  readonly results: { length: number; [i: number]: { isFinal: boolean; [j: number]: { transcript: string } } };
+}
+
+interface SpeechRecognitionApi extends EventTarget {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionApi;
+
 type BusinessScale = 'UMKM' | 'Menengah' | 'Korporasi';
-type TabId = 'profiling' | 'probing' | 'showcase' | 'academy';
+type TabId = 'profiling' | 'probing' | 'showcase' | 'academy' | 'voice-analyzer';
 
 type CustomerProfile = {
   scale: BusinessScale;
@@ -64,6 +82,7 @@ const tabs: Array<{ id: TabId; label: string; eyebrow: string }> = [
   { id: 'probing', label: 'Probing', eyebrow: 'Checklist' },
   { id: 'showcase', label: 'Value Showcase', eyebrow: 'Demo & ROI' },
   { id: 'academy', label: 'OCEAN Academy', eyebrow: 'Learning' },
+  { id: 'voice-analyzer', label: 'Voice Analyzer', eyebrow: 'AI Mode' },
 ];
 
 const scaleOptions: BusinessScale[] = ['UMKM', 'Menengah', 'Korporasi'];
@@ -823,6 +842,18 @@ export default function OceanNavigator() {
   ]);
   const [isCopilotLoading, setIsCopilotLoading] = useState(false);
 
+  const recognitionRef = useRef<SpeechRecognitionApi | null>(null);
+  const voiceResultRef = useRef<HTMLDivElement | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceInterim, setVoiceInterim] = useState('');
+  const [voiceAnalysis, setVoiceAnalysis] = useState('');
+  const [isVoiceAnalyzing, setIsVoiceAnalyzing] = useState(false);
+
+  const [tutorMessages, setTutorMessages] = useState<ChatMessage[]>([]);
+  const [tutorInput, setTutorInput] = useState('');
+  const [isTutorLoading, setIsTutorLoading] = useState(false);
+
   const visiblePainPoints = useMemo(() => {
     const matched = painPoints.filter(
       (painPoint) =>
@@ -997,6 +1028,116 @@ export default function OceanNavigator() {
       ]);
     } finally {
       setIsCopilotLoading(false);
+    }
+  };
+
+  const startVoiceRecording = useCallback(() => {
+    const win = window as Window & {
+      SpeechRecognition?: SpeechRecognitionCtor;
+      webkitSpeechRecognition?: SpeechRecognitionCtor;
+    };
+    const Ctor = win.SpeechRecognition ?? win.webkitSpeechRecognition;
+    if (!Ctor) {
+      alert('Browser Anda tidak mendukung pengenalan suara. Gunakan Chrome atau Edge terbaru.');
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognition.lang = 'id-ID';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalText = '';
+      let interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += text + ' ';
+        } else {
+          interimText += text;
+        }
+      }
+      if (finalText) setVoiceTranscript((prev) => prev + finalText);
+      setVoiceInterim(interimText);
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+      setVoiceInterim('');
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      setVoiceInterim('');
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }, []);
+
+  const stopVoiceRecording = useCallback(() => {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+    setVoiceInterim('');
+  }, []);
+
+  const analyzeVoice = async () => {
+    if (!voiceTranscript.trim() || isVoiceAnalyzing) return;
+    setIsVoiceAnalyzing(true);
+    try {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'voice-analysis', transcript: voiceTranscript }),
+      });
+      const payload = (await response.json()) as { answer?: string; error?: string };
+      if (!response.ok) {
+        setVoiceAnalysis(`Error dari AI: ${payload.error ?? response.status}`);
+      } else {
+        setVoiceAnalysis(payload.answer ?? 'AI tidak mengembalikan jawaban.');
+      }
+      setTimeout(() => voiceResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    } catch {
+      setVoiceAnalysis('Gagal menghubungi AI. Periksa koneksi dan coba lagi.');
+    } finally {
+      setIsVoiceAnalyzing(false);
+    }
+  };
+
+  const submitTutorQuestion = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const question = tutorInput.trim();
+    if (!question || isTutorLoading || !selectedAcademyModule) return;
+
+    setTutorInput('');
+    setTutorMessages((prev) => [...prev, { role: 'staff', text: question }]);
+    setIsTutorLoading(true);
+
+    try {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'tutor',
+          question,
+          product: selectedAcademyModule,
+          tutorHistory: tutorMessages,
+        }),
+      });
+      const payload = (await response.json()) as { answer?: string; error?: string };
+      setTutorMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: payload.answer ?? 'AI belum bisa menjawab.' },
+      ]);
+    } catch {
+      setTutorMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: 'Gagal terhubung ke AI. Coba lagi.' },
+      ]);
+    } finally {
+      setIsTutorLoading(false);
     }
   };
 
@@ -1440,6 +1581,106 @@ export default function OceanNavigator() {
               </section>
             )}
 
+            {activeTab === 'voice-analyzer' && (
+              <section className="space-y-6">
+                <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bca-blue">AI Mode</p>
+                  <h3 className="mt-3 text-2xl font-bold text-slate-900">Analisis Percakapan Nasabah</h3>
+                  <p className="mt-3 max-w-2xl leading-7 text-slate-600">
+                    Rekam percakapan antara staf dan nasabah. AI akan mendeteksi kebutuhan nasabah secara real-time dan merekomendasikan produk OCEAN yang paling relevan.
+                  </p>
+
+                  <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <button
+                      type="button"
+                      onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                      className={`flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-full text-white shadow-lg transition ${
+                        isRecording
+                          ? 'animate-pulse bg-red-500 shadow-red-200 hover:bg-red-600'
+                          : 'bg-bca-blue shadow-blue-200 hover:bg-bca-navy'
+                      }`}
+                    >
+                      <span className="text-3xl">{isRecording ? '⏹' : '🎙'}</span>
+                      <span className="mt-1 text-xs font-bold">{isRecording ? 'Stop' : 'Rekam'}</span>
+                    </button>
+
+                    <div className="flex-1 space-y-3">
+                      <div
+                        className={`rounded-lg p-3 text-sm font-semibold ring-1 ${
+                          isRecording
+                            ? 'bg-red-50 text-red-700 ring-red-200'
+                            : 'bg-slate-50 text-slate-600 ring-slate-200'
+                        }`}
+                      >
+                        {isRecording ? '● Sedang merekam percakapan...' : 'Siap merekam — tekan tombol mikrofon untuk mulai'}
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Bahasa: Indonesia (id-ID) · Didukung Chrome & Edge · Mikrofon harus diizinkan browser
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bca-blue">Transkrip Real-Time</p>
+                      <h4 className="mt-2 text-lg font-bold text-slate-900">Isi Percakapan</h4>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      {(voiceTranscript || voiceAnalysis) && (
+                        <button
+                          type="button"
+                          onClick={() => { setVoiceTranscript(''); setVoiceAnalysis(''); setVoiceInterim(''); }}
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                        >
+                          Hapus Semua
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { void analyzeVoice(); }}
+                        disabled={!voiceTranscript.trim() || isVoiceAnalyzing}
+                        className="rounded-lg bg-bca-orange px-4 py-2 text-sm font-bold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                      >
+                        {isVoiceAnalyzing ? 'Menganalisis...' : 'Analisis AI'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={voiceTranscript + (voiceInterim ? ` ${voiceInterim}` : '')}
+                    onChange={(e) => setVoiceTranscript(e.target.value)}
+                    rows={6}
+                    placeholder="Transkrip percakapan akan muncul di sini saat merekam. Anda juga bisa mengetik atau mengedit teks secara manual sebelum dianalisis."
+                    className="mt-4 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700 outline-none transition focus:border-bca-blue focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+
+                {voiceAnalysis && (
+                  <div ref={voiceResultRef} className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bca-blue">Hasil Analisis AI</p>
+                        <h4 className="mt-2 text-lg font-bold text-slate-900">Rekomendasi Produk OCEAN</h4>
+                      </div>
+                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Selesai</span>
+                    </div>
+                    <div className="mt-4 whitespace-pre-line rounded-lg bg-blue-50 p-5 text-sm leading-7 text-slate-700 ring-1 ring-blue-100">
+                      {voiceAnalysis}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCopilotOpen(true)}
+                      className="mt-4 rounded-lg border border-bca-blue px-4 py-2 text-sm font-bold text-bca-blue transition hover:bg-blue-50"
+                    >
+                      Tanya lebih lanjut ke Co-Pilot
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
             {activeTab === 'academy' && (
               <section className="space-y-6">
                 <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
@@ -1508,7 +1749,7 @@ export default function OceanNavigator() {
                         <button
                           key={feature.id}
                           type="button"
-                          onClick={() => setSelectedAcademyModule(feature)}
+                          onClick={() => { setSelectedAcademyModule(feature); setTutorMessages([]); setTutorInput(''); }}
                           className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md"
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -1627,6 +1868,55 @@ export default function OceanNavigator() {
                 <Placeholder label={`Placeholder: Video Animasi Fitur ${selectedAcademyModule.name}`} className="min-h-56" />
               </div>
               <p className="text-sm font-semibold text-slate-500 sm:col-span-3">Sumber dokumen: {selectedAcademyModule.source}</p>
+
+              <div className="sm:col-span-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bca-blue">
+                    AI Tutor — {selectedAcademyModule.name}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Tanya AI tentang cara menjual, menjelaskan, atau membedakan produk ini.
+                  </p>
+
+                  {tutorMessages.length > 0 && (
+                    <div className="mt-4 max-h-64 space-y-3 overflow-y-auto">
+                      {tutorMessages.map((msg, i) => (
+                        <div
+                          key={i}
+                          className={`max-w-[90%] rounded-lg p-3 text-sm leading-6 text-slate-700 ${
+                            msg.role === 'staff'
+                              ? 'ml-auto bg-blue-100 text-right'
+                              : 'bg-white ring-1 ring-slate-200'
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
+                      ))}
+                      {isTutorLoading && (
+                        <div className="max-w-[90%] rounded-lg bg-white p-3 text-sm text-slate-400 ring-1 ring-slate-200">
+                          AI sedang menyusun jawaban...
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <form onSubmit={submitTutorQuestion} className="mt-4 flex gap-2">
+                    <input
+                      value={tutorInput}
+                      onChange={(e) => setTutorInput(e.target.value)}
+                      placeholder={`Contoh: Gimana cara jelasin ${selectedAcademyModule.name} ke nasabah UMKM?`}
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-bca-blue focus:ring-4 focus:ring-blue-100"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isTutorLoading || !tutorInput.trim()}
+                      className="rounded-lg bg-bca-blue px-4 py-2 text-sm font-bold text-white transition hover:bg-bca-navy disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      Tanya
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </section>
         </div>
