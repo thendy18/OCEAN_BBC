@@ -135,8 +135,8 @@ const buildPrompt = (body: GeminiRequest) => {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as GeminiRequest;
-  const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
 
   if (!apiKey) {
     return NextResponse.json({ answer: fallbackAnswer(body), usedFallback: true });
