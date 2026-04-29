@@ -5,6 +5,7 @@
   --color-bca-deep: #005daa;
   --color-bca-navy: #003b70;
   --color-bca-orange: #f26522;
+  --font-sans: var(--font-plus-jakarta-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -17,8 +18,8 @@ html {
 
 body {
   min-height: 100vh;
-  background: #f8fafc;
-  color: #1f2937;
+  background: radial-gradient(circle at top right, #f8fafc, #e2e8f0 100%);
+  color: #0f172a;
 }
 
 button,
@@ -26,4 +27,36 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* Custom Scrollbar for a more premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Glassmorphism utilities */
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-md border border-white/40 shadow-lg;
+  }
+  .glass-dark {
+    @apply bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl;
+  }
+  .glass-bca {
+    @apply bg-[#003b70]/80 backdrop-blur-lg border border-[#0060af]/30 shadow-[0_8px_32px_rgba(0,59,112,0.3)];
+  }
 }
