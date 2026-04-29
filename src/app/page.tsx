@@ -410,14 +410,10 @@ export default function OceanNavigator() {
   };
 
   return (
-    <main className="min-h-screen relative overflow-hidden bg-slate-50 text-slate-800">
-      {/* Background Decorators */}
-      <div className="fixed top-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-blue-200/30 blur-[100px] pointer-events-none z-0" />
-      <div className="fixed bottom-[-10%] left-[-5%] w-[30%] h-[30%] rounded-full bg-orange-200/20 blur-[100px] pointer-events-none z-0" />
-
-      <div className="flex min-h-screen flex-col lg:flex-row relative z-10">
+    <main className="relative min-h-screen overflow-x-hidden bg-slate-50 text-slate-800">
+      <div className="relative z-10 flex min-h-screen w-full flex-col lg:flex-row lg:items-start">
         {/* PREMIUM SIDEBAR */}
-        <aside className="glass-bca px-5 py-6 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-72 lg:flex-col lg:px-6 lg:py-8 z-20 shadow-2xl">
+        <aside className="glass-bca z-20 px-5 py-6 text-white shadow-2xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:px-6 lg:py-7">
           <div className="flex items-center justify-between gap-4 lg:block">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
               <div className="flex items-center gap-2 mb-2">
@@ -436,7 +432,7 @@ export default function OceanNavigator() {
             </div>
           </div>
 
-          <nav className="mt-6 grid grid-cols-2 gap-3 lg:mt-10 lg:grid-cols-1">
+          <nav className="mt-6 grid grid-cols-2 gap-3 lg:mt-8 lg:grid-cols-1">
             {tabs.map((tab, index) => {
               const isActive = activeTab === tab.id;
               return (
@@ -464,7 +460,7 @@ export default function OceanNavigator() {
             })}
           </nav>
 
-          <div className="mt-auto hidden rounded-xl bg-gradient-to-br from-[#002a5c] to-[#001c3d] p-5 text-sm leading-relaxed text-blue-100 ring-1 ring-white/10 shadow-inner lg:block">
+          <div className="mt-8 hidden rounded-xl bg-gradient-to-br from-[#002a5c] to-[#001c3d] p-5 text-sm leading-relaxed text-blue-100 ring-1 ring-white/10 shadow-inner lg:block">
             <div className="flex items-center gap-2 mb-2">
               <BrainCircuit size={18} className="text-orange-400" />
               <p className="font-bold text-white">C-Level Lens</p>
@@ -474,7 +470,7 @@ export default function OceanNavigator() {
         </aside>
 
         {/* MAIN CONTENT AREA */}
-        <section className="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10 max-w-[1600px] mx-auto w-full">
+        <section className="w-full min-w-0 flex-1 px-4 pb-28 pt-6 sm:px-6 lg:w-[calc(100%-18rem)] lg:px-8 lg:py-8 lg:pb-28 2xl:px-10">
           <motion.header 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -508,7 +504,7 @@ export default function OceanNavigator() {
               className="w-full"
             >
               {activeTab === 'profiling' && (
-                <section className="grid gap-8 xl:grid-cols-[1fr_0.85fr]">
+                <section className="grid min-w-0 items-start gap-8 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.78fr)]">
                   <div className="rounded-2xl glass p-6 shadow-enterprise sm:p-8">
                     <div className="max-w-2xl">
                       <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#0060af]">Discovery</p>
@@ -632,7 +628,7 @@ export default function OceanNavigator() {
                     </div>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="min-w-0 space-y-6">
                     <Placeholder label="Video Animasi Value Proposition OCEAN by BCA" className="min-h-64 rounded-3xl" />
                     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="rounded-2xl glass p-6 shadow-sm">
                       <p className="text-base font-extrabold text-slate-900 flex items-center gap-2 mb-4">
@@ -674,7 +670,7 @@ export default function OceanNavigator() {
               )}
 
               {activeTab === 'probing' && (
-                <section className="grid gap-8 xl:grid-cols-[0.8fr_1fr]">
+                <section className="grid min-w-0 items-start gap-8 2xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1fr)]">
                   <div className="rounded-2xl glass p-6 shadow-enterprise sm:p-8 flex flex-col h-full">
                     <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#0060af]">Consultation Checklist</p>
                     <h3 className="mt-2 text-3xl font-extrabold text-slate-900">Pertanyaan membuka cerita</h3>
@@ -736,7 +732,7 @@ export default function OceanNavigator() {
                     </div>
                   </div>
 
-                  <motion.div variants={listVariants} initial="hidden" animate="show" className="grid gap-5 content-start">
+                  <motion.div variants={listVariants} initial="hidden" animate="show" className="grid min-w-0 content-start gap-5">
                     {probingPainPoints.map((painPoint) => {
                       const isSelected = selectedPainPoints.includes(painPoint.id);
                       const friendlyCopy = friendlyPainPointCopy[painPoint.id] ?? {
@@ -788,7 +784,7 @@ export default function OceanNavigator() {
 
               {activeTab === 'showcase' && (
                 <section className="space-y-8">
-                  <div className="grid gap-8 xl:grid-cols-[1fr_0.8fr]">
+                  <div className="grid min-w-0 gap-8 2xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.8fr)]">
                     <div className="rounded-2xl glass p-6 shadow-enterprise sm:p-8">
                       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start border-b border-slate-200/60 pb-5">
                         <div>
@@ -863,7 +859,7 @@ export default function OceanNavigator() {
                     </div>
                   </div>
 
-                  <div className="grid gap-8 xl:grid-cols-[1fr_1fr]">
+                  <div className="grid min-w-0 gap-8 2xl:grid-cols-2">
                     <Placeholder label="Interactive Dashboard UI OCEAN" className="min-h-[400px] rounded-3xl border-4 border-white/50 shadow-2xl" />
                     <div className="rounded-2xl glass p-6 shadow-enterprise sm:p-8 flex flex-col">
                       <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#0060af]">Simulasi Live</p>
