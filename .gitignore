@@ -4,3 +4,6 @@ dist/
 .env.local
 *.js.map
 coverage/
+.next/
+.next-ocean/
+*.log
